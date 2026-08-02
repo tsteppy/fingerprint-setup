@@ -6,6 +6,7 @@ stage passes, retries and failures without hardware.
 
 from fingerprint_setup.client import (
     ENROLL_COMPLETED,
+    RETRY_RESULTS,
     STAGE_PASSED,
     StatusCallback,
     VERIFY_MATCH,
@@ -76,9 +77,7 @@ class FakeClient:
         ]
         self._enroll_queue = []
         for result in results:
-            done = result not in (STAGE_PASSED,) and not result.startswith(
-                "enroll-retry"
-            )
+            done = result not in (STAGE_PASSED,) and result not in RETRY_RESULTS
             on_status(result, done)
             if result == ENROLL_COMPLETED:
                 fingers = self._enrolled.setdefault(username, [])
