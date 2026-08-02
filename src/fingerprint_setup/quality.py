@@ -30,8 +30,8 @@ class Verdict:
 
 TEST_PROMPTS: list[TestPrompt] = [
     *[TestPrompt("natural", "Press as you normally would") for _ in range(6)],
-    TestPrompt("offset", "Press with nearer the tip of your finger"),
-    TestPrompt("offset", "Press with nearer the knuckle"),
+    TestPrompt("offset", "Press with the tip of your finger"),
+    TestPrompt("offset", "Press with the base of your finger, nearer the knuckle"),
     TestPrompt("offset", "Press slightly to the left"),
     TestPrompt("offset", "Press slightly to the right"),
 ]
@@ -54,6 +54,8 @@ class QualityTest:
         return len(self._results) >= len(TEST_PROMPTS)
 
     def record(self, result: str) -> None:
+        if self.finished:
+            raise RuntimeError("test is already finished")
         prompt = TEST_PROMPTS[min(self.index, len(TEST_PROMPTS) - 1)]
         self._results.append((prompt.kind, result == VERIFY_MATCH))
 
@@ -66,7 +68,17 @@ class QualityTest:
         matches = natural + offset
         total = len(self._results)
 
-        if matches >= 9:
+        # Narrow-enrolment case: natural presses work well, but offset presses fail.
+        # This is a valid, usable enrolment even if total is low.
+        if natural >= 5 and offset <= 1:
+            band = "fair"
+            headline = "Your enrolment works, but only for your usual press"
+            advice = (
+                "Your usual press works well, but the enrolment is narrow — "
+                "presses that land off-centre fail. Re-enrol covering more of "
+                "your fingertip if you want it to be more forgiving."
+            )
+        elif matches >= 9:
             band = "good"
             headline = "Your enrolment looks solid"
             advice = "Ready to use for logging in."
@@ -78,13 +90,6 @@ class QualityTest:
             band = "weak"
             headline = "Your enrolment is unreliable"
             advice = "Re-enrol, covering more of your fingertip each press."
-
-        if natural >= 5 and offset <= 1:
-            advice = (
-                "Your usual press works well, but the enrolment is narrow — "
-                "presses that land off-centre fail. Re-enrol covering more of "
-                "your fingertip if you want it to be more forgiving."
-            )
 
         return Verdict(
             band=band,

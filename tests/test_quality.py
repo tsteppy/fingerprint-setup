@@ -36,7 +36,8 @@ def test_seven_matches_is_fair():
 
 
 def test_six_matches_is_weak():
-    assert _run([VERIFY_MATCH] * 6 + [VERIFY_NO_MATCH] * 4).verdict().band == "weak"
+    # 3 natural matches + 3 offset matches = 6 total, not narrow case, should be weak
+    assert _run([VERIFY_MATCH] * 3 + [VERIFY_NO_MATCH] * 3 + [VERIFY_MATCH] * 3 + [VERIFY_NO_MATCH] * 1).verdict().band == "weak"
 
 
 def test_natural_and_offset_are_counted_separately():
@@ -77,4 +78,22 @@ def test_prompts_advance_from_natural_to_offset():
 
     assert test.index == 6
     assert test.current.kind == "offset"
-    assert test.current.instruction == "Press with nearer the tip of your finger"
+    assert test.current.instruction == "Press with the tip of your finger"
+
+
+def test_narrow_enrolment_is_fair_not_weak():
+    # natural=6, offset=0 gives 6 total matches, which would normally be "weak",
+    # but the narrow case should elevate it to "fair" with appropriate messaging.
+    verdict = _run([VERIFY_MATCH] * 6 + [VERIFY_NO_MATCH] * 4).verdict()
+    assert verdict.band == "fair"
+    assert "unreliable" not in verdict.headline.lower()
+    assert "narrow" in verdict.advice.lower()
+
+
+def test_eleventh_record_raises():
+    test = QualityTest()
+    for _ in range(10):
+        test.record(VERIFY_MATCH)
+    assert test.finished is True
+    with pytest.raises(RuntimeError, match="already finished"):
+        test.record(VERIFY_MATCH)
