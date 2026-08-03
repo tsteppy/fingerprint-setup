@@ -17,7 +17,24 @@ Works with any reader supported by fprintd.
 
 ## Install
 
+Submitted to Flathub — https://github.com/flathub/flathub/pull/9613 — after
+which:
+
     flatpak install flathub io.github.tsteppy.FingerprintSetup
+
+Until then, build it yourself:
+
+    git clone https://github.com/tsteppy/fingerprintsetup.git
+    cd fingerprintsetup
+    flatpak install flathub org.gnome.Platform//50 org.gnome.Sdk//50
+    flatpak run org.flatpak.Builder --user --install --force-clean build-dir \
+        io.github.tsteppy.FingerprintSetup.json
+    flatpak run io.github.tsteppy.FingerprintSetup
+
+A Flathub build cannot read your PAM configuration (Flathub does not permit
+host `/etc` access), so it reports whether fingerprint login is currently on
+as *unknown* and gives you the command for your distribution. Running from
+source has no such restriction.
 
 ## Running from source
 
