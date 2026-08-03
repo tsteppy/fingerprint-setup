@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Fingerprint Setup
+Comment=Enrol and manage fingerprints, and check that they actually work
+Exec=fingerprint-setup
+Icon=io.github.tsteppy.FingerprintSetup
+Terminal=false
+Categories=Settings;HardwareSettings;Security;
+Keywords=fingerprint;biometric;enrol;enroll;fprint;login;reader;

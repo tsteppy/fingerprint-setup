@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.tsteppy.FingerprintSetup</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <name>Fingerprint Setup</name>
+  <summary>Enrol fingerprints that actually work</summary>
+
+  <description>
+    <p>
+      Laptop fingerprint readers see a small patch of your finger, so a press
+      only matches if it lands where you enrolled. Enrolling every press the
+      same way is the usual reason fingerprint login feels unreliable.
+    </p>
+    <p>
+      Fingerprint Setup guides each enrolment press to a different part of your
+      fingertip, then tests the result and tells you whether it is any good
+      before you rely on it.
+    </p>
+    <p>Works with any reader supported by fprintd.</p>
+  </description>
+
+  <launchable type="desktop-id">io.github.tsteppy.FingerprintSetup.desktop</launchable>
+  <content_rating type="oars-1.1"/>
+
+  <url type="homepage">https://github.com/tsteppy/fingerprint-setup</url>
+  <url type="bugtracker">https://github.com/tsteppy/fingerprint-setup/issues</url>
+
+  <releases>
+    <release version="0.1.0" date="2026-08-02">
+      <description><p>First release.</p></description>
+    </release>
+  </releases>
+</component>
