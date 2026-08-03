@@ -22,7 +22,8 @@
                 "mkdir -p /app/lib",
                 "cp -r src/fingerprint_setup /app/lib/fingerprint_setup",
                 "install -Dm644 data/io.github.tsteppy.FingerprintSetup.desktop /app/share/applications/io.github.tsteppy.FingerprintSetup.desktop",
-                "install -Dm644 data/io.github.tsteppy.FingerprintSetup.metainfo.xml /app/share/metainfo/io.github.tsteppy.FingerprintSetup.metainfo.xml"
+                "install -Dm644 data/io.github.tsteppy.FingerprintSetup.metainfo.xml /app/share/metainfo/io.github.tsteppy.FingerprintSetup.metainfo.xml",
+                "install -Dm644 data/icons/io.github.tsteppy.FingerprintSetup.svg /app/share/icons/hicolor/scalable/apps/io.github.tsteppy.FingerprintSetup.svg"
             ],
             "sources": [
                 { "type": "dir", "path": "." }
