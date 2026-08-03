@@ -25,7 +25,12 @@
                 "install -Dm644 data/icons/io.github.tsteppy.FingerprintSetup.svg /app/share/icons/hicolor/scalable/apps/io.github.tsteppy.FingerprintSetup.svg"
             ],
             "sources": [
-                { "type": "dir", "path": "." }
+                {
+                    "type": "git",
+                    "url": "https://github.com/tsteppy/fingerprintsetup.git",
+                    "tag": "v0.1.0",
+                    "commit": "1d3dc683e83a5a6c94ccb54aab4fea62ce1c8112"
+                }
             ]
         }
     ]
