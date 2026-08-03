@@ -20,11 +20,28 @@
     <p>Works with any reader supported by fprintd.</p>
   </description>
 
-  <launchable type="desktop-id">io.github.tsteppy.FingerprintSetup.desktop</launchable>
+  <developer id="io.github.tsteppy">
+    <name>Thaddeus Stepanovich</name>
+  </developer>
+
+  <screenshots>
+    <screenshot type="default">
+      <caption>Enrolled fingers, with a test for each and the fingerprint login status</caption>
+      <image>https://raw.githubusercontent.com/tsteppy/fingerprintsetup/main/data/screenshots/main-window.png</image>
+    </screenshot>
+  </screenshots>
+
+  <branding>
+    <color type="primary" scheme_preference="light">#c0d5f0</color>
+    <color type="primary" scheme_preference="dark">#1a3050</color>
+  </branding>
+
   <content_rating type="oars-1.1"/>
 
-  <url type="homepage">https://github.com/tsteppy/fingerprint-setup</url>
-  <url type="bugtracker">https://github.com/tsteppy/fingerprint-setup/issues</url>
+  <launchable type="desktop-id">io.github.tsteppy.FingerprintSetup.desktop</launchable>
+  <url type="homepage">https://github.com/tsteppy/fingerprintsetup</url>
+  <url type="bugtracker">https://github.com/tsteppy/fingerprintsetup/issues</url>
+  <url type="vcs-browser">https://github.com/tsteppy/fingerprintsetup</url>
 
   <releases>
     <release version="0.1.0" date="2026-08-02">
