@@ -7,6 +7,9 @@ awkwardness in one file is what lets the rest of the app stay synchronous
 and testable.
 """
 
+import sys
+import traceback
+
 from gi.repository import Gio, GLib
 
 from fingerprint_setup.client import StatusCallback
@@ -15,7 +18,10 @@ BUS_NAME = "net.reactivated.Fprint"
 MANAGER_PATH = "/net/reactivated/Fprint/Manager"
 MANAGER_IFACE = "net.reactivated.Fprint.Manager"
 DEVICE_IFACE = "net.reactivated.Fprint.Device"
-PROPS_IFACE = "org.freedesktop.DBus.Properties"
+
+# How long a nested enrol/verify main loop is allowed to run without a
+# terminal signal from fprintd before we give up and release the claim.
+OPERATION_TIMEOUT_SECONDS = 120
 
 
 class NoDeviceError(Exception):
@@ -27,8 +33,8 @@ class DeviceBusyError(Exception):
 
 
 class FprintdClient:
-    def __init__(self, object_path: str) -> None:
-        self._bus = Gio.bus_get_sync(Gio.BusType.SYSTEM, None)
+    def __init__(self, object_path: str, bus: Gio.DBusConnection | None = None) -> None:
+        self._bus = bus if bus is not None else Gio.bus_get_sync(Gio.BusType.SYSTEM, None)
         self._path = object_path
         self._proxy = Gio.DBusProxy.new_sync(
             self._bus,
@@ -40,6 +46,7 @@ class FprintdClient:
             None,
         )
         self._claimed = False
+        self._active_loop: GLib.MainLoop | None = None
 
     # -- properties -----------------------------------------------------
 
@@ -110,25 +117,60 @@ class FprintdClient:
     # -- enrol / verify -------------------------------------------------
 
     def _run_until_done(
-        self, signal: str, start: str, stop: str, finger: str, on_status: StatusCallback
+        self,
+        signal: str,
+        start: str,
+        stop: str,
+        finger: str,
+        on_status: StatusCallback,
+        timeout_result: str,
     ) -> None:
         loop = GLib.MainLoop()
+        timed_out = False
 
         def handler(_proxy, _sender, signal_name, params):
             if signal_name != signal:
                 return
             result, done = params.unpack()
-            on_status(result, done)
+            try:
+                on_status(result, done)
+            except Exception:
+                print(
+                    f"fprintd_client: on_status callback raised for {signal}",
+                    file=sys.stderr,
+                )
+                traceback.print_exc(file=sys.stderr)
+                loop.quit()
+                return
             if done:
                 loop.quit()
 
+        def on_timeout():
+            nonlocal timed_out
+            timed_out = True
+            loop.quit()
+            return False
+
         handler_id = self._proxy.connect("g-signal", handler)
+        timeout_id = GLib.timeout_add_seconds(OPERATION_TIMEOUT_SECONDS, on_timeout)
+        self._active_loop = loop
         try:
             self._proxy.call_sync(
                 start, GLib.Variant("(s)", (finger,)), Gio.DBusCallFlags.NONE, -1, None
             )
             loop.run()
+            if timed_out:
+                try:
+                    on_status(timeout_result, True)
+                except Exception:
+                    print(
+                        f"fprintd_client: on_status callback raised on timeout for {signal}",
+                        file=sys.stderr,
+                    )
+                    traceback.print_exc(file=sys.stderr)
         finally:
+            self._active_loop = None
+            GLib.source_remove(timeout_id)
             self._proxy.disconnect(handler_id)
             try:
                 self._proxy.call_sync(stop, None, Gio.DBusCallFlags.NONE, -1, None)
@@ -136,16 +178,22 @@ class FprintdClient:
                 pass
 
     def enroll_start(self, finger: str, on_status: StatusCallback) -> None:
-        self._run_until_done("EnrollStatus", "EnrollStart", "EnrollStop", finger, on_status)
+        self._run_until_done(
+            "EnrollStatus", "EnrollStart", "EnrollStop", finger, on_status, "enroll-failed"
+        )
 
     def enroll_stop(self) -> None:
-        pass  # handled by _run_until_done
+        if self._active_loop is not None:
+            self._active_loop.quit()
 
     def verify_start(self, finger: str, on_status: StatusCallback) -> None:
-        self._run_until_done("VerifyStatus", "VerifyStart", "VerifyStop", finger, on_status)
+        self._run_until_done(
+            "VerifyStatus", "VerifyStart", "VerifyStop", finger, on_status, "verify-no-match"
+        )
 
     def verify_stop(self) -> None:
-        pass  # handled by _run_until_done
+        if self._active_loop is not None:
+            self._active_loop.quit()
 
 
 def default_device() -> FprintdClient:
@@ -158,4 +206,4 @@ def default_device() -> FprintdClient:
     paths = list(result.unpack()[0])
     if not paths:
         raise NoDeviceError("fprintd reports no fingerprint reader")
-    return FprintdClient(paths[0])
+    return FprintdClient(paths[0], bus=bus)
