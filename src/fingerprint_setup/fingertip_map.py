@@ -15,15 +15,26 @@ gi.require_version("Gtk", "4.0")
 from gi.repository import Gtk  # noqa: E402
 
 # (x, y, radius) in a 0..1 space over the fingertip drawing.
+#
+# The outline is an ellipse (rx=0.36*width, ry=0.44*height around the
+# centre) but each zone is drawn as a circle of radius zr*min(width,height).
+# That mismatch -- an ellipse that stretches with the two dimensions
+# independently, against a circle whose radius only tracks the smaller one
+# -- means a zone that fits at one aspect ratio can poke outside the
+# outline at another. These positions/radii were chosen by numerically
+# checking every zone's full boundary against the outline ellipse (not by
+# eye) across width 200-500 at height 250, so they stay inside at the
+# default 200x250 allocation and once the layout stretches width past
+# height.
 ZONE_LAYOUT: dict[str, tuple[float, float, float]] = {
     "centre": (0.50, 0.50, 0.15),
     "top": (0.50, 0.26, 0.14),
     "bottom": (0.50, 0.75, 0.14),
-    "left": (0.24, 0.50, 0.13),
-    "right": (0.76, 0.50, 0.13),
-    "roll-left": (0.28, 0.71, 0.12),
-    "roll-right": (0.72, 0.71, 0.12),
-    "centre-2": (0.50, 0.92, 0.10),
+    "left": (0.28, 0.50, 0.13),
+    "right": (0.72, 0.50, 0.13),
+    "roll-left": (0.31, 0.69, 0.12),
+    "roll-right": (0.69, 0.69, 0.12),
+    "centre-2": (0.50, 0.83, 0.10),
 }
 
 

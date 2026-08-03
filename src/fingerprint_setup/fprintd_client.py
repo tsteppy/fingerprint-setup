@@ -170,7 +170,8 @@ class FprintdClient:
                     traceback.print_exc(file=sys.stderr)
         finally:
             self._active_loop = None
-            GLib.source_remove(timeout_id)
+            if not timed_out:
+                GLib.source_remove(timeout_id)
             self._proxy.disconnect(handler_id)
             try:
                 self._proxy.call_sync(stop, None, Gio.DBusCallFlags.NONE, -1, None)
