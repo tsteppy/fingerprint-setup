@@ -28,6 +28,7 @@ class EnrollDialog(Adw.Window):
         self._finger = finger
         self._coach = EnrollmentCoach(client.num_enroll_stages, client.scan_type)
         self._completed = False
+        self._cancelled = False
 
         self._map = FingertipMap()
         self._instruction = Gtk.Label(wrap=True, justify=Gtk.Justification.CENTER)
@@ -60,7 +61,33 @@ class EnrollDialog(Adw.Window):
         toolbar.set_content(box)
         self.set_content(toolbar)
 
+        # Covers dismissal via the window manager / titlebar close button or
+        # Escape, which goes through this signal rather than through close().
+        self.connect("close-request", self._on_close_request)
+
         self._refresh()
+
+    def _maybe_cancel(self) -> None:
+        """Stop any in-flight enrolment unless it already finished on its own.
+
+        Called from every dismissal path (Cancel button, close-request,
+        `run()`'s own final `close()`). `enroll_stop()` is safe to call
+        even when nothing is running -- it no-ops without an active loop.
+        Only mark the dialog as cancelled if the coach had not already
+        reached a terminal state, so a normal successful/failed finish is
+        not mistaken for the user cancelling.
+        """
+        if not self._coach.finished:
+            self._cancelled = True
+        self._client.enroll_stop()
+
+    def _on_close_request(self, _window) -> bool:
+        self._maybe_cancel()
+        return False
+
+    def close(self) -> None:
+        self._maybe_cancel()
+        Gtk.Window.close(self)
 
     def _refresh(self) -> None:
         position = self._coach.current
@@ -96,4 +123,6 @@ class EnrollDialog(Adw.Window):
         finally:
             self._client.release()
         self.close()
+        if self._cancelled:
+            return False
         return self._completed
