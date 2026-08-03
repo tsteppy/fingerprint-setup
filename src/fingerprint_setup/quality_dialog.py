@@ -7,6 +7,7 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, GLib, Gtk  # noqa: E402
 
 from fingerprint_setup.client import FingerprintClient
+from fingerprint_setup.fprintd_client import DeviceBusyError
 from fingerprint_setup.quality import TEST_PROMPTS, QualityTest, Verdict
 
 BAND_STYLE = {"good": "success", "fair": "warning", "weak": "error"}
@@ -30,6 +31,11 @@ class QualityTestDialog(Adw.Window):
         self._test = QualityTest()
         self._verdict: Verdict | None = None
         self._cancelled = False
+        # True only when run() had to bail out because the reader was taken
+        # before we could claim it -- distinct from a normal cancellation,
+        # so the caller can tell the two apart even though both make run()
+        # return None.
+        self.busy = False
 
         self._instruction = Gtk.Label(wrap=True, justify=Gtk.Justification.CENTER)
         self._instruction.add_css_class("title-2")
@@ -97,7 +103,12 @@ class QualityTestDialog(Adw.Window):
 
     def run(self) -> Verdict | None:
         self.present()
-        self._client.claim(self._username)
+        try:
+            self._client.claim(self._username)
+        except DeviceBusyError:
+            self.busy = True
+            self.close()
+            return None
         try:
             while not self._test.finished and not self._cancelled:
                 self._refresh()
@@ -127,3 +138,66 @@ class QualityTestDialog(Adw.Window):
         if self._cancelled:
             return None
         return self._verdict
+
+
+class ResultDialog(Adw.Window):
+    """Shows a finished quality test's verdict: headline, the natural/offset
+    match breakdown, and the advice -- the whole reason the test ran.
+
+    A toast could not carry this (Adw.Toast has no add_css_class -- it is a
+    GObject.Object, not a Gtk.Widget -- so applying BAND_STYLE to a toast
+    raises AttributeError before the toast is ever shown) and a six-second
+    toast could not have held this much text anyway.
+    """
+
+    def __init__(self, parent: Gtk.Window, verdict: Verdict) -> None:
+        super().__init__(transient_for=parent, modal=True)
+        self.set_title("Test result")
+        self.set_default_size(420, 360)
+
+        status = Adw.StatusPage(
+            title=verdict.headline,
+            icon_name={
+                "good": "emblem-ok-symbolic",
+                "fair": "dialog-warning-symbolic",
+                "weak": "dialog-error-symbolic",
+            }.get(verdict.band, "dialog-information-symbolic"),
+        )
+
+        counts = Gtk.Label(
+            label=(
+                f"{verdict.matches} of {verdict.total} matched "
+                f"({verdict.natural_matches} of 6 natural presses, "
+                f"{verdict.offset_matches} of 4 offset presses)"
+            ),
+            wrap=True,
+            justify=Gtk.Justification.CENTER,
+        )
+        counts.add_css_class("title-4")
+        style = BAND_STYLE.get(verdict.band)
+        if style:
+            counts.add_css_class(style)
+
+        advice = Gtk.Label(
+            label=verdict.advice,
+            wrap=True,
+            justify=Gtk.Justification.CENTER,
+        )
+        advice.add_css_class("body")
+
+        body = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        for edge in ("top", "bottom", "start", "end"):
+            getattr(body, f"set_margin_{edge}")(12)
+        body.append(counts)
+        body.append(advice)
+        status.set_child(body)
+
+        header = Adw.HeaderBar()
+        close = Gtk.Button(label="Close")
+        close.connect("clicked", lambda _b: self.close())
+        header.pack_end(close)
+
+        toolbar = Adw.ToolbarView()
+        toolbar.add_top_bar(header)
+        toolbar.set_content(status)
+        self.set_content(toolbar)

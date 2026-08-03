@@ -9,8 +9,8 @@ from gi.repository import Adw, Gtk  # noqa: E402
 from fingerprint_setup.client import FingerprintClient
 from fingerprint_setup.enroll_dialog import EnrollDialog
 from fingerprint_setup.fprintd_client import DeviceBusyError
-from fingerprint_setup.pam_status import detect_pam_status
-from fingerprint_setup.test_dialog import BAND_STYLE, QualityTestDialog
+from fingerprint_setup.pam_status import COMMANDS, detect_pam_status
+from fingerprint_setup.quality_dialog import QualityTestDialog, ResultDialog
 
 # The window only ever imports this module for the DeviceBusyError type --
 # never a concrete client -- so it never touches D-Bus. Importing
@@ -36,10 +36,16 @@ FINGER_LABELS = {
 # Its own `explanation` text says "could not determine how your distribution
 # manages PAM", which is wrong once the family *is* known -- there is simply
 # no command wired up for it yet. Render that case honestly here instead of
-# repeating the misleading text, without touching pam_status.py. Sourced
-# from COMMANDS in pam_status.py: every family with an empty command tuple,
-# other than the genuinely-undetected "unknown" bucket.
-_KNOWN_UNSUPPORTED_FAMILIES = {"arch"}
+# repeating the misleading text, without touching pam_status.py. Derived
+# from COMMANDS in pam_status.py rather than hardcoded, so a new
+# no-command-yet family added there is picked up automatically instead of
+# needing this set edited in lockstep: every family with an empty command
+# tuple, other than the genuinely-undetected "unknown" bucket.
+_KNOWN_UNSUPPORTED_FAMILIES = {
+    family
+    for family, (enable, disable) in COMMANDS.items()
+    if not enable and not disable and family != "unknown"
+}
 
 
 def fetch_enrolled_fingers(
@@ -152,6 +158,10 @@ class MainWindow(Adw.ApplicationWindow):
                     "example a login prompt. Try again in a moment."
                 ),
             )
+            retry = Gtk.Button(label="Retry")
+            retry.set_valign(Gtk.Align.CENTER)
+            retry.connect("clicked", lambda _b: self._rebuild())
+            row.add_suffix(retry)
             self._fingers_group.add(row)
             self._finger_rows.append(row)
             self._picker.set_child(
@@ -256,22 +266,26 @@ class MainWindow(Adw.ApplicationWindow):
     def _on_finger_chosen(self, _listbox, row) -> None:
         self._picker.popdown()
         dialog = EnrollDialog(self, self._client, self._username, row.finger)
-        dialog.run()
+        succeeded = dialog.run()
+        message = dialog.final_message
+        if message:
+            toast = Adw.Toast(title=message if succeeded else f"Not enrolled: {message}")
+            toast.set_timeout(6)
+            self._toast_overlay_show(toast)
         self._rebuild()
 
     def _on_test_clicked(self, _button, finger: str) -> None:
         dialog = QualityTestDialog(self, self._client, self._username, finger)
         verdict = dialog.run()
         if verdict is None:
+            if dialog.busy:
+                toast = Adw.Toast(
+                    title="The fingerprint reader is in use -- try again in a moment."
+                )
+                toast.set_timeout(6)
+                self._toast_overlay_show(toast)
             return
-        toast = Adw.Toast(
-            title=f"{verdict.headline} — {verdict.matches} of {verdict.total} matched"
-        )
-        toast.set_timeout(6)
-        style = BAND_STYLE.get(verdict.band)
-        if style:
-            toast.add_css_class(style)
-        self._toast_overlay_show(toast)
+        ResultDialog(self, verdict).present()
 
     def _on_delete_clicked(self, _button, finger: str) -> None:
         deleted = delete_finger_safe(self._client, self._username, finger)
