@@ -8,8 +8,16 @@ from gi.repository import Adw, Gtk  # noqa: E402
 
 from fingerprint_setup.client import FingerprintClient
 from fingerprint_setup.enroll_dialog import EnrollDialog
+from fingerprint_setup.fprintd_client import DeviceBusyError
 from fingerprint_setup.pam_status import detect_pam_status
 from fingerprint_setup.test_dialog import BAND_STYLE, QualityTestDialog
+
+# The window only ever imports this module for the DeviceBusyError type --
+# never a concrete client -- so it never touches D-Bus. Importing
+# fprintd_client at module scope only pulls in Gio/GLib symbols, which
+# PyGObject already provides as a hard dependency of Gtk/Adw, so this stays
+# safe on a machine with no fprintd at all (--simulate never calls anything
+# in fprintd_client; it only needs the exception class to exist).
 
 FINGER_LABELS = {
     "left-thumb": "Left thumb",
@@ -28,8 +36,51 @@ FINGER_LABELS = {
 # Its own `explanation` text says "could not determine how your distribution
 # manages PAM", which is wrong once the family *is* known -- there is simply
 # no command wired up for it yet. Render that case honestly here instead of
-# repeating the misleading text, without touching pam_status.py.
+# repeating the misleading text, without touching pam_status.py. Sourced
+# from COMMANDS in pam_status.py: every family with an empty command tuple,
+# other than the genuinely-undetected "unknown" bucket.
 _KNOWN_UNSUPPORTED_FAMILIES = {"arch"}
+
+
+def fetch_enrolled_fingers(
+    client: FingerprintClient, username: str
+) -> tuple[list[str], bool]:
+    """Claim the reader and list what is enrolled.
+
+    Returns `(fingers, busy)`. `busy` is True when another process (the
+    login greeter, another copy of this app, an in-flight
+    `fprintd-verify`) already holds the claim -- `DeviceBusyError` is
+    caught here rather than left to propagate, so callers never need a
+    live GTK window or display to exercise this path. Only claims that
+    succeed are released; a failed claim holds nothing to release.
+    """
+    try:
+        client.claim(username)
+    except DeviceBusyError:
+        return [], True
+    try:
+        return client.list_enrolled(username), False
+    finally:
+        client.release()
+
+
+def delete_finger_safe(client: FingerprintClient, username: str, finger: str) -> bool:
+    """Claim the reader and delete `finger`. Returns False if it was busy.
+
+    Mirrors `fetch_enrolled_fingers`: `DeviceBusyError` from `claim()` is
+    reported through the return value instead of raised, so this is
+    testable without a display and so callers can show a toast instead of
+    crashing.
+    """
+    try:
+        client.claim(username)
+    except DeviceBusyError:
+        return False
+    try:
+        client.delete_finger(finger)
+    finally:
+        client.release()
+    return True
 
 
 class MainWindow(Adw.ApplicationWindow):
@@ -87,11 +138,32 @@ class MainWindow(Adw.ApplicationWindow):
     # -- rendering ------------------------------------------------------
 
     def _render_fingers(self) -> None:
-        self._client.claim(self._username)
-        try:
-            fingers = self._client.list_enrolled(self._username)
-        finally:
-            self._client.release()
+        fingers, busy = fetch_enrolled_fingers(self._client, self._username)
+
+        if busy:
+            # Reader held elsewhere (login greeter, another copy of this
+            # app, an in-flight fprintd-verify). Show it without raising --
+            # this is called from __init__ and from every _rebuild(), so an
+            # uncaught DeviceBusyError here used to kill the whole app.
+            row = Adw.ActionRow(
+                title="The fingerprint reader is in use",
+                subtitle=(
+                    "Another application is using it right now -- for "
+                    "example a login prompt. Try again in a moment."
+                ),
+            )
+            self._fingers_group.add(row)
+            self._finger_rows.append(row)
+            self._picker.set_child(
+                Gtk.Label(
+                    label="The reader is in use",
+                    margin_top=8,
+                    margin_bottom=8,
+                    margin_start=12,
+                    margin_end=12,
+                )
+            )
+            return
 
         self._populate_picker(fingers)
 
@@ -131,7 +203,7 @@ class MainWindow(Adw.ApplicationWindow):
         # genuinely-unknown case. Don't tell the user we couldn't figure out
         # their distribution when we did -- we just don't have a command for
         # it yet.
-        if not command and status.family not in ("unknown", ""):
+        if not command and status.family in _KNOWN_UNSUPPORTED_FAMILIES:
             subtitle = (
                 f"This app detected a {status.family}-family distribution, but "
                 "does not yet know the command for managing fingerprint login "
@@ -202,11 +274,14 @@ class MainWindow(Adw.ApplicationWindow):
         self._toast_overlay_show(toast)
 
     def _on_delete_clicked(self, _button, finger: str) -> None:
-        self._client.claim(self._username)
-        try:
-            self._client.delete_finger(finger)
-        finally:
-            self._client.release()
+        deleted = delete_finger_safe(self._client, self._username, finger)
+        if not deleted:
+            toast = Adw.Toast(
+                title="The fingerprint reader is in use — the finger was not deleted."
+            )
+            toast.set_timeout(6)
+            self._toast_overlay_show(toast)
+            return
         self._rebuild()
 
     def _on_copy_command(self, _button, command: str) -> None:
