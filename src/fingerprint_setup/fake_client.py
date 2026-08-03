@@ -4,6 +4,8 @@ Results are queued by the caller, so a test can reproduce any sequence of
 stage passes, retries and failures without hardware.
 """
 
+import time
+
 from fingerprint_setup.client import (
     ENROLL_COMPLETED,
     RETRY_RESULTS,
@@ -19,10 +21,19 @@ class FakeClient:
         num_enroll_stages: int = 8,
         device_name: str = "Fake Reader",
         scan_type: str = "press",
+        stage_delay: float = 0.0,
     ) -> None:
         self._num_enroll_stages = num_enroll_stages
         self._device_name = device_name
         self._scan_type = scan_type
+        # Real fprintd delivers each EnrollStatus signal as its own D-Bus
+        # round trip, so the dialogs get a chance to repaint between them.
+        # Left at the default of 0, every enroll_start() stage fires back
+        # to back with no pause -- fine for tests, but it means --simulate
+        # flashes both dialogs open and closed instantly and neither can
+        # actually be reviewed. main() passes a small delay for
+        # --simulate; tests never do, so they stay fast.
+        self._stage_delay = stage_delay
         self._claimed_by: str | None = None
         self._enrolled: dict[str, list[str]] = {}
         self._enroll_queue: list[str] = []
@@ -83,6 +94,12 @@ class FakeClient:
                 fingers = self._enrolled.setdefault(username, [])
                 if finger not in fingers:
                     fingers.append(finger)
+            if self._stage_delay:
+                # on_status() above already pumped the GTK main loop (see
+                # EnrollDialog._on_status), so the frame for this stage is
+                # already on screen -- a plain sleep here is enough to make
+                # it watchable instead of needing its own event pumping.
+                time.sleep(self._stage_delay)
 
     def enroll_stop(self) -> None:
         pass
