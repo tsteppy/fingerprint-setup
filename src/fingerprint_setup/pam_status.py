@@ -40,7 +40,7 @@ COMMANDS = {
 
 @dataclass(frozen=True)
 class PamStatus:
-    enabled: bool
+    enabled: bool | None   # None means "could not be determined"
     family: str
     enable_command: str
     disable_command: str
@@ -108,11 +108,27 @@ def detect_pam_status(
         os_release = default_os_release if os_release is None else os_release
 
     family = detect_family(_read(os_release))
-    pam_text = _read(os.path.join(pam_dir, PAM_FILES[family]))
-    enabled = is_enabled(pam_text)
+
+    # Flathub forbids granting a sandboxed app access to the host's /etc, so
+    # in that build the PAM stack simply cannot be read. Distinguish "read it,
+    # fingerprint login is off" from "could not read it at all" -- reporting a
+    # confident "off" we did not verify would be exactly the kind of false
+    # statement this app exists to avoid. The distribution is still detectable,
+    # because /run/host/os-release needs no permission, so the right command
+    # can still be offered.
+    pam_file = os.path.join(pam_dir, PAM_FILES[family])
+    enabled = is_enabled(_read(pam_file)) if os.path.exists(pam_file) else None
+
     enable_command, disable_command = COMMANDS[family]
 
-    if enable_command:
+    if enabled is None and enable_command:
+        explanation = (
+            "This app cannot read your login configuration from inside its "
+            "sandbox, so it cannot tell whether fingerprint login is currently "
+            "on. Run the command in a terminal to turn it on, or the matching "
+            "--disable to turn it off."
+        )
+    elif enable_command:
         explanation = (
             "Fingerprint login is configured through PAM. This app does not "
             "change PAM — run the command in a terminal so you can see what it "

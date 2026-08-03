@@ -1,7 +1,7 @@
 {
     "app-id": "io.github.tsteppy.FingerprintSetup",
     "runtime": "org.gnome.Platform",
-    "runtime-version": "46",
+    "runtime-version": "50",
     "sdk": "org.gnome.Sdk",
     "command": "fingerprint-setup",
     "finish-args": [
@@ -9,8 +9,7 @@
         "--socket=wayland",
         "--socket=fallback-x11",
         "--device=dri",
-        "--system-talk-name=net.reactivated.Fprint",
-        "--filesystem=host-etc:ro"
+        "--system-talk-name=net.reactivated.Fprint"
     ],
     "modules": [
         {

@@ -205,6 +205,10 @@ class MainWindow(Adw.ApplicationWindow):
 
     def _render_pam(self) -> None:
         status = detect_pam_status()
+        # enabled is None when the state could not be read at all (a sandboxed
+        # build cannot see the host's /etc). Offer the enable command in that
+        # case: someone who already has it on will recognise the situation,
+        # and claiming a state we did not verify would be a lie.
         command = status.disable_command if status.enabled else status.enable_command
 
         # detect_pam_status() names the distribution family even when it has
@@ -223,11 +227,12 @@ class MainWindow(Adw.ApplicationWindow):
         else:
             subtitle = status.explanation
 
-        row = Adw.ActionRow(
-            title="Fingerprint login is "
-            + ("on" if status.enabled else "off"),
-            subtitle=subtitle,
-        )
+        if status.enabled is None:
+            title = "Fingerprint login"
+        else:
+            title = "Fingerprint login is " + ("on" if status.enabled else "off")
+
+        row = Adw.ActionRow(title=title, subtitle=subtitle)
         if command:
             copy = Gtk.Button(icon_name="edit-copy-symbolic")
             copy.set_valign(Gtk.Align.CENTER)

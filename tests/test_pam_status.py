@@ -56,7 +56,10 @@ def test_status_reads_the_real_file_layout(tmp_path: Path):
 
 def test_missing_files_do_not_raise(tmp_path: Path):
     status = detect_pam_status(str(tmp_path / "nope"), str(tmp_path / "nope"))
-    assert status.enabled is False
+    # Unreadable is "unknown", never "off" -- claiming fingerprint login is
+    # disabled when we simply could not look would be a false statement about
+    # the user's own security configuration.
+    assert status.enabled is None
     assert status.family == "unknown"
 
 
@@ -99,3 +102,16 @@ def test_falls_back_to_etc_when_not_sandboxed(tmp_path: Path, monkeypatch):
     pam_dir, os_release = pam_status.default_paths()
     assert pam_dir == "/etc/pam.d"
     assert os_release == "/etc/os-release"
+
+
+def test_unreadable_pam_reports_unknown_not_off(tmp_path: Path):
+    """A sandbox that cannot read /etc must not claim login is off."""
+    os_release = tmp_path / "os-release"
+    os_release.write_text("ID=linuxmint\nID_LIKE=ubuntu debian\n")
+
+    status = detect_pam_status(str(tmp_path / "empty-pam.d"), str(os_release))
+
+    assert status.enabled is None, "unreadable state must be None, never False"
+    assert status.family == "debian", "the distribution is still detectable"
+    assert "pam-auth-update" in status.enable_command
+    assert "cannot read" in status.explanation.lower()
