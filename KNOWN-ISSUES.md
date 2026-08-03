@@ -47,6 +47,13 @@ not silently forgotten.
 
 ## Packaging
 
+- **Flatpak reserves `/etc`.** A sandboxed build cannot be given
+  `--filesystem=/etc/...`; flatpak refuses the mount and the app sees an empty
+  `/etc`. The host filesystem appears under `/run/host` instead, which is why
+  `pam_status.default_paths()` prefers it and the manifest grants
+  `--filesystem=host-etc:ro`. Anything else added later that reads host config
+  must do the same.
+
 - **`appstreamcli validate` reports unreachable URLs** because the homepage and
   bugtracker links point at a repository that has not been pushed yet. Resolves
   on publication. Passes with `--no-net` today apart from a pedantic

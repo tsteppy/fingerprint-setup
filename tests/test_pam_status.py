@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from fingerprint_setup import pam_status
 from fingerprint_setup.pam_status import detect_family, detect_pam_status, is_enabled
 
 DEBIAN_ENABLED = """\
@@ -71,3 +72,30 @@ def test_unknown_family_explains_rather_than_guessing(tmp_path: Path):
     assert status.family == "unknown"
     assert status.enable_command == ""
     assert "distribution" in status.explanation.lower()
+
+
+def test_host_paths_win_when_they_exist(tmp_path: Path, monkeypatch):
+    """A sandboxed build must read the host's /etc, not the empty one inside."""
+    host = tmp_path / "run" / "host"
+    (host / "etc" / "pam.d").mkdir(parents=True)
+    (host / "etc" / "pam.d" / "common-auth").write_text(DEBIAN_ENABLED)
+    (host / "os-release").write_text("ID=linuxmint\nID_LIKE=ubuntu debian\n")
+
+    monkeypatch.setattr("fingerprint_setup.pam_status.HOST_PREFIX", str(host))
+    pam_dir, os_release = pam_status.default_paths()
+
+    assert pam_dir == str(host / "etc" / "pam.d")
+    assert os_release == str(host / "os-release")
+
+    status = detect_pam_status(pam_dir, os_release)
+    assert status.enabled is True
+    assert status.family == "debian"
+
+
+def test_falls_back_to_etc_when_not_sandboxed(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(
+        "fingerprint_setup.pam_status.HOST_PREFIX", str(tmp_path / "nonexistent")
+    )
+    pam_dir, os_release = pam_status.default_paths()
+    assert pam_dir == "/etc/pam.d"
+    assert os_release == "/etc/os-release"

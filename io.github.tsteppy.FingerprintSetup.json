@@ -10,8 +10,7 @@
         "--socket=fallback-x11",
         "--device=dri",
         "--system-talk-name=net.reactivated.Fprint",
-        "--filesystem=/etc/pam.d:ro",
-        "--filesystem=/etc/os-release:ro"
+        "--filesystem=host-etc:ro"
     ],
     "modules": [
         {

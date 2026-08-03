@@ -9,6 +9,13 @@ see what it does.
 import os
 from dataclasses import dataclass
 
+# Flatpak reserves /etc inside the sandbox and refuses to mount the host's
+# copy there, so a sandboxed build sees an empty /etc and would report
+# "fingerprint login off, distribution unknown" for a machine where it is on.
+# The host filesystem is exposed under /run/host instead. Prefer that when it
+# exists, which is exactly when we are sandboxed.
+HOST_PREFIX = "/run/host"
+
 # Files that carry the primary auth stack, by distribution family.
 PAM_FILES = {
     "debian": "common-auth",
@@ -76,9 +83,30 @@ def _read(path: str) -> str:
         return ""
 
 
+def _first_existing(*candidates: str) -> str:
+    for candidate in candidates:
+        if os.path.exists(candidate):
+            return candidate
+    return candidates[-1]
+
+
+def default_paths() -> tuple[str, str]:
+    """Where to read PAM state, host paths first when running sandboxed."""
+    pam_dir = _first_existing(f"{HOST_PREFIX}/etc/pam.d", "/etc/pam.d")
+    os_release = _first_existing(
+        f"{HOST_PREFIX}/os-release", f"{HOST_PREFIX}/etc/os-release", "/etc/os-release"
+    )
+    return pam_dir, os_release
+
+
 def detect_pam_status(
-    pam_dir: str = "/etc/pam.d", os_release: str = "/etc/os-release"
+    pam_dir: str | None = None, os_release: str | None = None
 ) -> PamStatus:
+    if pam_dir is None or os_release is None:
+        default_pam_dir, default_os_release = default_paths()
+        pam_dir = default_pam_dir if pam_dir is None else pam_dir
+        os_release = default_os_release if os_release is None else os_release
+
     family = detect_family(_read(os_release))
     pam_text = _read(os.path.join(pam_dir, PAM_FILES[family]))
     enabled = is_enabled(pam_text)
