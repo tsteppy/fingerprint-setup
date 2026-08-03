@@ -35,8 +35,6 @@ class QualityTestDialog(Adw.Window):
         self._instruction.add_css_class("title-2")
         self._counter = Gtk.Label()
         self._counter.add_css_class("dim-label")
-        self._tally = Gtk.Label()
-        self._tally.add_css_class("caption")
         self._progress = Gtk.ProgressBar(show_text=False)
 
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
@@ -46,7 +44,6 @@ class QualityTestDialog(Adw.Window):
         box.append(self._counter)
         box.append(self._instruction)
         box.append(self._progress)
-        box.append(self._tally)
 
         header = Adw.HeaderBar()
         cancel = Gtk.Button(label="Cancel")
@@ -102,7 +99,7 @@ class QualityTestDialog(Adw.Window):
         self.present()
         self._client.claim(self._username)
         try:
-            while not self._test.finished:
+            while not self._test.finished and not self._cancelled:
                 self._refresh()
                 while GLib.MainContext.default().pending():
                     GLib.MainContext.default().iteration(False)
@@ -111,6 +108,13 @@ class QualityTestDialog(Adw.Window):
                 self._client.verify_start(
                     self._finger, lambda result, done: outcome.append(result)
                 )
+                # A cancellation that arrives mid-press (e.g. after fprintd
+                # has already delivered a non-final status such as
+                # verify-retry-scan, which leaves `outcome` non-empty) must
+                # not be recorded as a result -- check _cancelled before
+                # consulting `outcome` at all.
+                if self._cancelled:
+                    break
                 if not outcome:
                     break
                 self._test.record(outcome[-1])
