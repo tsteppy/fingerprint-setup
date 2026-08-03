@@ -17,12 +17,9 @@ Works with any reader supported by fprintd.
 
 ## Install
 
-Submitted to Flathub — https://github.com/flathub/flathub/pull/9613 — after
-which:
-
-    flatpak install flathub io.github.tsteppy.FingerprintSetup
-
-Until then, build it yourself:
+Not on Flathub: their guidelines exclude AI-assisted code, and this app's
+implementation was written with AI assistance. Build it yourself instead —
+one command once the runtime is present:
 
     git clone https://github.com/tsteppy/fingerprintsetup.git
     cd fingerprintsetup
@@ -59,3 +56,15 @@ it saw.
 ## Licence
 
 GPL-3.0-or-later.
+
+## How it was built
+
+The implementation was written with AI assistance, directed and reviewed by a
+human author, against a hand-written specification. Said plainly because
+someone deciding whether to trust a tool that touches their login should know
+how it was made — and because it is the reason this is not on Flathub, whose
+guidelines exclude AI-assisted code.
+
+What that means in practice: the code has been read, reviewed and run, the
+tests are real, and the limitations in this README and in `KNOWN-ISSUES.md`
+are stated rather than glossed over. Judge it on that.
