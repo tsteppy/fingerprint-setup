@@ -1,0 +1,32 @@
+{
+    "app-id": "io.github.tsteppy.FingerprintSetup",
+    "runtime": "org.gnome.Platform",
+    "runtime-version": "46",
+    "sdk": "org.gnome.Sdk",
+    "command": "fingerprint-setup",
+    "finish-args": [
+        "--share=ipc",
+        "--socket=wayland",
+        "--socket=fallback-x11",
+        "--device=dri",
+        "--system-talk-name=net.reactivated.Fprint",
+        "--filesystem=/etc/pam.d:ro",
+        "--filesystem=/etc/os-release:ro"
+    ],
+    "modules": [
+        {
+            "name": "fingerprint-setup",
+            "buildsystem": "simple",
+            "build-commands": [
+                "install -Dm755 fingerprint-setup /app/bin/fingerprint-setup",
+                "mkdir -p /app/lib",
+                "cp -r src/fingerprint_setup /app/lib/fingerprint_setup",
+                "install -Dm644 data/io.github.tsteppy.FingerprintSetup.desktop /app/share/applications/io.github.tsteppy.FingerprintSetup.desktop",
+                "install -Dm644 data/io.github.tsteppy.FingerprintSetup.metainfo.xml /app/share/metainfo/io.github.tsteppy.FingerprintSetup.metainfo.xml"
+            ],
+            "sources": [
+                { "type": "dir", "path": "." }
+            ]
+        }
+    ]
+}

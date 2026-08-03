@@ -1,0 +1,2 @@
+#!/bin/sh
+exec python3 -c "import sys; sys.path.insert(0, '/app/lib'); from fingerprint_setup.__main__ import main; sys.exit(main())" "$@"
