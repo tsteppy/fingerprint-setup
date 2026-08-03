@@ -256,7 +256,13 @@ class MainWindow(Adw.ApplicationWindow):
                 listbox.append(row)
             listbox.connect("row-activated", self._on_finger_chosen)
 
+        # Propagate the natural width as well as the height, or the popover
+        # collapses to its minimum and truncates labels like "Right middle
+        # finger". The floor keeps the list from looking cramped when only
+        # short labels remain.
         scroller = Gtk.ScrolledWindow(propagate_natural_height=True,
+                                      propagate_natural_width=True,
+                                      min_content_width=200,
                                       max_content_height=320)
         scroller.set_child(listbox)
         self._picker.set_child(scroller)
