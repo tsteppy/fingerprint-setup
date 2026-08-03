@@ -9,6 +9,7 @@ from gi.repository import Adw, GLib, Gtk  # noqa: E402
 from fingerprint_setup.client import FingerprintClient
 from fingerprint_setup.enrollment import EnrollmentCoach
 from fingerprint_setup.fingertip_map import FingertipMap
+from fingerprint_setup.fprintd_client import DeviceBusyError
 
 
 class EnrollDialog(Adw.Window):
@@ -29,6 +30,11 @@ class EnrollDialog(Adw.Window):
         self._coach = EnrollmentCoach(client.num_enroll_stages, client.scan_type)
         self._completed = False
         self._cancelled = False
+        # Set from the terminal CoachEvent's message (or, if the reader was
+        # taken before we could claim it, a busy message) so the caller can
+        # tell the user what actually happened -- previously this was
+        # computed and then discarded, leaving the user to guess.
+        self._final_message: str | None = None
 
         self._map = FingertipMap()
         self._instruction = Gtk.Label(wrap=True, justify=Gtk.Justification.CENTER)
@@ -110,19 +116,38 @@ class EnrollDialog(Adw.Window):
             self._refresh()
         if event.kind == "completed":
             self._completed = True
+        if event.kind in ("completed", "duplicate", "failed"):
+            self._final_message = event.message
         # let the UI repaint between presses
         while GLib.MainContext.default().pending():
             GLib.MainContext.default().iteration(False)
 
+    @property
+    def final_message(self) -> str | None:
+        """What happened, in words -- set once the dialog has a terminal
+        outcome (success, duplicate, failure, cancellation or a busy
+        reader). None only if run() has not returned yet.
+        """
+        return self._final_message
+
     def run(self) -> bool:
         """Enrol, blocking until fprintd reports the operation is done."""
         self.present()
-        self._client.claim(self._username)
+        try:
+            self._client.claim(self._username)
+        except DeviceBusyError:
+            self._final_message = (
+                "The fingerprint reader is in use -- try again in a moment."
+            )
+            self.close()
+            return False
         try:
             self._client.enroll_start(self._finger, self._on_status)
         finally:
             self._client.release()
         self.close()
         if self._cancelled:
+            if self._final_message is None:
+                self._final_message = "Enrolment was cancelled."
             return False
         return self._completed
